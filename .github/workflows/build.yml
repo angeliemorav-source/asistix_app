@@ -17,11 +17,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.19.0'
-          channel: 'stable'
+      - name: Install Flutter Manually
+        run: |
+          git clone https://github.com/flutter/flutter.git -b stable --depth 1 _flutter
+          echo "$PWD/_flutter/bin" >> $GITHUB_PATH
+          flutter doctor
 
       - name: Install dependencies
         run: flutter pub get
