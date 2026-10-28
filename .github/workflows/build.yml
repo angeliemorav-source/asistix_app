@@ -17,12 +17,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.x'
+          flutter-version: '3.19.0'
           channel: 'stable'
-          cache: true
 
       - name: Install dependencies
         run: flutter pub get
