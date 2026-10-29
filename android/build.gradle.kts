@@ -13,16 +13,16 @@ subprojects {
     project.layout.buildDirectory.set(newSubprojectBuildDir)
 }
 
-// Sincronizar Java y Kotlin en la versión 11 para evitar cualquier conflicto con tflite_flutter y otros plugins
+// Forzar Java 17 y Kotlin JVM Target 17 en ABSOLUTAMENTE TODOS los submódulos (como cámara, tflite, etc.)
 subprojects {
     afterEvaluate {
         tasks.withType<JavaCompile>().configureEach {
-            sourceCompatibility = "11"
-            targetCompatibility = "11"
+            sourceCompatibility = "17"
+            targetCompatibility = "17"
         }
         tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
             compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
             }
         }
     }
