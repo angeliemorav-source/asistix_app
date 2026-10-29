@@ -13,17 +13,19 @@ subprojects {
     project.layout.buildDirectory.set(newSubprojectBuildDir)
 }
 
-// Forzar Java 17 y Kotlin JVM Target 17 en ABSOLUTAMENTE TODOS los submódulos (como cámara, tflite, etc.)
+// Unificar Java y Kotlin en la versión 17 mediante JVM Toolchain para todos los submódulos
 subprojects {
-    afterEvaluate {
-        tasks.withType<JavaCompile>().configureEach {
-            sourceCompatibility = "17"
-            targetCompatibility = "17"
-        }
-        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-            compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    plugins.withId("java") {
+        configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(17))
             }
+        }
+    }
+
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
 }
