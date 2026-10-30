@@ -65,21 +65,22 @@ jobs:
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Compilar APK en Release
-        run: flutter build apk --release --no-tree-shake-icons
+      - name: Precompilar dependencias de Flutter
+        run: flutter build apk --config-only
+
+      - name: Compilar APK nativa directamente con Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: Reubicar APK en android/app/
         run: |
           mkdir -p android/app/
-          find build/android/ build/app/ outputs/ android/app/build/ -name "*release.apk" -exec cp {} android/app/app-release.apk \; || true
-          # Copia de seguridad si la ruta es la estándar de Gradle
-          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk android/app/app-release.apk
-          fi
+          find android/app/build/outputs/apk/release/ build/app/outputs/ -name "*release.apk" -exec cp {} android/app/app-release.apk \; || true
 
       - name: Guardar la APK como resultado
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
           path: android/app/app-release.apk
-
