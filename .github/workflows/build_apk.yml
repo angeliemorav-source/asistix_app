@@ -9,6 +9,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Definimos variables globales para forzar a cualquier proceso Java (Gradle/Kotlin) a usar límites altos de memoria
+    env:
+      GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError -Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=1g\" -Dorg.gradle.parallel=false -Dorg.gradle.caching=false"
+      JAVA_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
+      _JAVA_OPTIONS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
+      KOTLIN_DAEMON_ARGS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
+
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
@@ -29,20 +36,21 @@ jobs:
           mkdir -p ${ANDROID_HOME}/licenses
           yes | sdkmanager --licenses || true
 
+      - name: Configurar variables locales de Gradle antes de compilar
+        run: |
+          mkdir -p android
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          echo "org.gradle.parallel=false" >> android/gradle.properties
+          echo "org.gradle.configureondemand=false" >> android/gradle.properties
+
       - name: Instalar dependencias
         run: flutter pub get
 
       - name: Compilar APK en Release
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Guardar la APK como resultado
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Compilar APK en Release
-        env:
-          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
-        run: flutter build apk --release
-
