@@ -74,14 +74,28 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Guardar la APK como resultado (Búsqueda Universal)
+      - name: Crear carpetas manuales y reubicar APK por la fuerza
+        run: |
+          # 1. Creamos a la fuerza la ruta que solicita el sistema en la raíz de Flutter
+          mkdir -p build/app/outputs/flutter-apk/
+          
+          # 2. Creamos por si acaso la ruta alternativa en android/app/
+          mkdir -p android/app/
+          
+          # 3. Buscamos cualquier APK generada en el sistema y la copiamos en AMBAS rutas para asegurar aceptación
+          find . -name "*.apk" -exec cp {} build/app/outputs/flutter-apk/app-release.apk \; || true
+          find . -name "*.apk" -exec cp {} android/app/app-release.apk \; || true
+          
+          # 4. Mostramos en la consola del servidor dónde quedaron los archivos para verificar visualmente
+          echo "--- Contenido verificado en build/app/outputs/flutter-apk/ ---"
+          ls -la build/app/outputs/flutter-apk/ || echo "Vacío"
+          echo "--- Contenido verificado en android/app/ ---"
+          ls -la android/app/ || echo "Vacío"
+
+      - name: Guardar la APK como resultado
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            build/app/outputs/flutter-apk/*.apk
-            android/**/*.apk
+          path: android/app/app-release.apk
           if-no-files-found: error
-
 
