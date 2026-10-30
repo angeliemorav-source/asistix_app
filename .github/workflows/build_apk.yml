@@ -74,13 +74,16 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
+            # ... (Todo lo anterior se queda igual)
+
       - name: Reubicar APK en android/app/
         run: |
           mkdir -p android/app/
-          find android/app/build/outputs/apk/release/ build/app/outputs/ -name "*release.apk" -exec cp {} android/app/app-release.apk \; || true
+          cp android/app/build/outputs/apk/release/app-release.apk android/app/app-release.apk
 
       - name: Guardar la APK como resultado
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
           path: android/app/app-release.apk
+
