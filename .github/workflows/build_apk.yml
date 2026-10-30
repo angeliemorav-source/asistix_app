@@ -74,16 +74,14 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-            # ... (Todo lo anterior se queda igual)
-
-      - name: Reubicar APK en android/app/
-        run: |
-          mkdir -p android/app/
-          cp android/app/build/outputs/apk/release/app-release.apk android/app/app-release.apk
-
-      - name: Guardar la APK como resultado
+      - name: Guardar la APK como resultado (Búsqueda Universal)
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
-          path: android/app/app-release.apk
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            build/app/outputs/flutter-apk/*.apk
+            android/**/*.apk
+          if-no-files-found: error
+
 
