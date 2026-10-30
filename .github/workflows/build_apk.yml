@@ -40,3 +40,9 @@ jobs:
         with:
           name: apk-release
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Compilar APK en Release
+        env:
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
+        run: flutter build apk --release
+
