@@ -9,9 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    # Definimos variables globales para forzar a cualquier proceso Java (Gradle/Kotlin) a usar límites altos de memoria
     env:
-      GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError -Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=1g\" -Dorg.gradle.parallel=false -Dorg.gradle.caching=false"
+      GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError -Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=1g\" -Dorg.gradle.parallel=false"
       JAVA_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
       _JAVA_OPTIONS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
       KOTLIN_DAEMON_ARGS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
@@ -36,12 +35,33 @@ jobs:
           mkdir -p ${ANDROID_HOME}/licenses
           yes | sdkmanager --licenses || true
 
-      - name: Configurar variables locales de Gradle antes de compilar
+      - name: Forzar compatibilidad JVM Target 17 en todas las dependencias
         run: |
           mkdir -p android
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
           echo "org.gradle.parallel=false" >> android/gradle.properties
-          echo "org.gradle.configureondemand=false" >> android/gradle.properties
+          
+          # Inyectamos una directiva global al build.gradle de la raíz para alinear subproyectos como tflite_flutter
+          cat << 'EOF' >> android/build.gradle
+          
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      project.android {
+                          compileOptions {
+                              sourceCompatibility = JavaVersion.VERSION_17
+                              targetCompatibility = JavaVersion.VERSION_17
+                          }
+                      }
+                  }
+                  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                      kotlinOptions {
+                          jvmTarget = "17"
+                      }
+                  }
+              }
+          }
+          EOF
 
       - name: Instalar dependencias
         run: flutter pub get
