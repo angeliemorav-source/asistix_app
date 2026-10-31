@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -156,10 +157,17 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
       return;
     }
 
+    // Seleccionar específicamente la cámara frontal
+    final frontCamera = cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
+
     _cameraController = CameraController(
-      cameras[0],
+      frontCamera,
       ResolutionPreset.medium,
       enableAudio: false,
+      imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
     );
 
     try {
@@ -206,8 +214,11 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
   }
 
   InputImage? _convertCameraImageToInputImage(CameraImage image) {
-    final camera = cameras[0];
-    final sensorOrientation = camera.sensorOrientation;
+    final frontCamera = cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
+    final sensorOrientation = frontCamera.sensorOrientation;
     
     InputImageRotation? rotation;
     if (sensorOrientation == 90) {
@@ -221,21 +232,22 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
     }
 
     final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) {
-      return null;
+    if (format == null) return null;
+
+    // Concatenar los planos en un solo Uint8List para NV21 / YUV420
+    final WriteBuffer allBytes = WriteBuffer();
+    for (final Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
     }
-    if (image.planes.isEmpty) {
-      return null;
-    }
-    final plane = image.planes.first;
+    final bytes = allBytes.done().buffer.asUint8List();
 
     return InputImage.fromBytes(
-      bytes: plane.bytes,
+      bytes: bytes,
       metadata: InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
         rotation: rotation,
         format: format,
-        bytesPerRow: plane.bytesPerRow,
+        bytesPerRow: image.planes.first.bytesPerRow,
       ),
     );
   }
@@ -294,9 +306,7 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
       debugPrint('Error en motor biométrico: $e');
     }
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -396,7 +406,10 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
                     alignment: Alignment.center,
                     children: [
                       _isCameraInitialized && _cameraController != null
-                          ? CameraPreview(_cameraController!)
+                          ? AspectRatio(
+                              aspectRatio: _cameraController!.value.aspectRatio,
+                              child: CameraPreview(_cameraController!),
+                            )
                           : const Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
                       Positioned(
                         bottom: 16,
@@ -442,7 +455,7 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
   List<double>? _vectorCapturadoAdmin;
   
   late final FaceDetector _adminFaceDetector;
-  Timer? _adminFaceTimer;
+  bool _isDetectingAdmin = false;
 
   @override
   void initState() {
@@ -460,7 +473,18 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
   Future<void> _initializeCamera() async {
     try {
       if (cameras.isNotEmpty) {
-        _cameraController = CameraController(cameras[0], ResolutionPreset.medium, enableAudio: false);
+        final frontCamera = cameras.firstWhere(
+          (camera) => camera.lensDirection == CameraLensDirection.front,
+          orElse: () => cameras.first,
+        );
+
+        _cameraController = CameraController(
+          frontCamera,
+          ResolutionPreset.medium,
+          enableAudio: false,
+          imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
+        );
+
         await _cameraController!.initialize();
         if (mounted) {
           setState(() {
@@ -475,40 +499,82 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
   }
 
   void _iniciarVerificacionRostroAdmin() {
-    _adminFaceTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
-      if (_cameraController == null || !_cameraController!.value.isInitialized || _isSaving) {
-        return;
-      }
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+
+    _cameraController!.startImageStream((CameraImage image) async {
+      if (_isSaving || _isDetectingAdmin) return;
+      _isDetectingAdmin = true;
 
       try {
-        final XFile tempImage = await _cameraController!.takePicture();
-        final inputImage = InputImage.fromFilePath(tempImage.path);
-        final faces = await _adminFaceDetector.processImage(inputImage);
+        final inputImage = _convertCameraImageToInputImage(image);
+        if (inputImage != null) {
+          final faces = await _adminFaceDetector.processImage(inputImage);
 
-        if (faces.isNotEmpty) {
-          final vector = BiometricEngine.extraerVectorBiometrico(faces.first);
-          if (vector != null && mounted) {
-            setState(() {
-              _rostroDetectadoAdmin = true;
-              _vectorCapturadoAdmin = vector;
-            });
-          }
-        } else {
-          if (mounted) {
-            setState(() {
-              _rostroDetectadoAdmin = false;
-            });
+          if (faces.isNotEmpty) {
+            final vector = BiometricEngine.extraerVectorBiometrico(faces.first);
+            if (vector != null && mounted) {
+              setState(() {
+                _rostroDetectadoAdmin = true;
+                _vectorCapturadoAdmin = vector;
+              });
+            }
+          } else {
+            if (mounted && _rostroDetectadoAdmin) {
+              setState(() {
+                _rostroDetectadoAdmin = false;
+              });
+            }
           }
         }
       } catch (e) {
-        debugPrint('Error en verificación admin: $e');
+        debugPrint('Error en verificación admin stream: $e');
+      } finally {
+        _isDetectingAdmin = false;
       }
     });
   }
 
+  InputImage? _convertCameraImageToInputImage(CameraImage image) {
+    final frontCamera = cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
+    final sensorOrientation = frontCamera.sensorOrientation;
+    
+    InputImageRotation? rotation;
+    if (sensorOrientation == 90) {
+      rotation = InputImageRotation.rotation90deg;
+    } else if (sensorOrientation == 180) {
+      rotation = InputImageRotation.rotation180deg;
+    } else if (sensorOrientation == 270) {
+      rotation = InputImageRotation.rotation270deg;
+    } else {
+      rotation = InputImageRotation.rotation0deg;
+    }
+
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
+
+    final WriteBuffer allBytes = WriteBuffer();
+    for (final Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+    final bytes = allBytes.done().buffer.asUint8List();
+
+    return InputImage.fromBytes(
+      bytes: bytes,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: format,
+        bytesPerRow: image.planes.first.bytesPerRow,
+      ),
+    );
+  }
+
   @override
   void dispose() {
-    _adminFaceTimer?.cancel();
+    _cameraController?.stopImageStream();
     _adminFaceDetector.close();
     _cameraController?.dispose();
     _cedulaController.dispose();
@@ -537,6 +603,8 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
     });
 
     try {
+      // Detenemos temporalmente el stream para tomar la foto limpia con takePicture
+      await _cameraController?.stopImageStream();
       final XFile imageFile = await _cameraController!.takePicture();
       final bytes = await imageFile.readAsBytes();
 
@@ -557,13 +625,14 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
         'vector_embedding': jsonEncode(_vectorCapturadoAdmin),
       });
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Enrolamiento biométrico completado!')));
       _cedulaController.clear();
       _nombreController.clear();
       _apellidoController.clear();
+      
+      // Reiniciamos el stream de detección
+      _iniciarVerificacionRostroAdmin();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
@@ -665,7 +734,10 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(22),
                   child: _isCameraInitialized && _cameraController != null
-                      ? CameraPreview(_cameraController!)
+                      ? AspectRatio(
+                          aspectRatio: _cameraController!.value.aspectRatio,
+                          child: CameraPreview(_cameraController!),
+                        )
                       : const Center(child: CircularProgressIndicator()),
                 ),
               ),
