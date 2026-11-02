@@ -158,7 +158,6 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
       return;
     }
 
-    // Seleccionar específicamente la cámara frontal
     final frontCamera = cameras.firstWhere(
       (camera) => camera.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
@@ -199,6 +198,7 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
         final inputImage = _convertCameraImageToInputImage(image);
         if (inputImage != null) {
           final faces = await _faceDetector.processImage(inputImage);
+          debugPrint('Rostros detectados (Totem): ${faces.length}');
 
           if (faces.isNotEmpty && !_isProcessing) {
             debugPrint('¡Rostro detectado en tiempo real! Ejecutando match biométrico...');
@@ -219,23 +219,20 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
       (camera) => camera.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
-    final sensorOrientation = frontCamera.sensorOrientation;
     
-    InputImageRotation? rotation;
+    final sensorOrientation = frontCamera.sensorOrientation;
+    InputImageRotation rotation = InputImageRotation.rotation270deg;
     if (sensorOrientation == 90) {
       rotation = InputImageRotation.rotation90deg;
     } else if (sensorOrientation == 180) {
       rotation = InputImageRotation.rotation180deg;
-    } else if (sensorOrientation == 270) {
-      rotation = InputImageRotation.rotation270deg;
-    } else {
+    } else if (sensorOrientation == 0) {
       rotation = InputImageRotation.rotation0deg;
     }
 
     final format = InputImageFormatValue.fromRawValue(image.format.raw);
     if (format == null) return null;
 
-    // Concatenar los planos en un solo Uint8List para NV21 / YUV420
     final WriteBuffer allBytes = WriteBuffer();
     for (final Plane plane in image.planes) {
       allBytes.putUint8List(plane.bytes);
@@ -510,6 +507,7 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
         final inputImage = _convertCameraImageToInputImage(image);
         if (inputImage != null) {
           final faces = await _adminFaceDetector.processImage(inputImage);
+          debugPrint('Rostros detectados (Admin): ${faces.length}');
 
           if (faces.isNotEmpty) {
             final vector = BiometricEngine.extraerVectorBiometrico(faces.first);
@@ -540,16 +538,14 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
       (camera) => camera.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
-    final sensorOrientation = frontCamera.sensorOrientation;
     
-    InputImageRotation? rotation;
+    final sensorOrientation = frontCamera.sensorOrientation;
+    InputImageRotation rotation = InputImageRotation.rotation270deg;
     if (sensorOrientation == 90) {
       rotation = InputImageRotation.rotation90deg;
     } else if (sensorOrientation == 180) {
       rotation = InputImageRotation.rotation180deg;
-    } else if (sensorOrientation == 270) {
-      rotation = InputImageRotation.rotation270deg;
-    } else {
+    } else if (sensorOrientation == 0) {
       rotation = InputImageRotation.rotation0deg;
     }
 
@@ -604,7 +600,6 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
     });
 
     try {
-      // Detenemos temporalmente el stream para tomar la foto limpia con takePicture
       await _cameraController?.stopImageStream();
       final XFile imageFile = await _cameraController!.takePicture();
       final bytes = await imageFile.readAsBytes();
@@ -627,12 +622,11 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Enrolamiento biométrico completado!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Escaner biométrico completado!')));
       _cedulaController.clear();
       _nombreController.clear();
       _apellidoController.clear();
       
-      // Reiniciamos el stream de detección
       _iniciarVerificacionRostroAdmin();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -650,7 +644,7 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E293B),
-        title: Text('Panel Admin - Enrolamiento Biométrico', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
+        title: Text('Panel Admin - Escaner Biométrico', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
@@ -714,7 +708,7 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
                       child: _isSaving
                           ? const CircularProgressIndicator(color: Colors.white)
-                          : Text('Guardar Enrolamiento', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+                          : Text('Guardar', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
