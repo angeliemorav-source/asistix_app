@@ -188,6 +188,10 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
       return;
     }
 
+    if (_cameraController!.value.isStreamingImages) {
+      return;
+    }
+
     _cameraController!.startImageStream((CameraImage image) async {
       if (_isProcessing || _isDetectingFaces) {
         return;
@@ -202,8 +206,17 @@ class _TotemHomePageState extends State<TotemHomePage> with SingleTickerProvider
 
           if (faces.isNotEmpty && !_isProcessing) {
             debugPrint('¡Rostro detectado en tiempo real! Ejecutando match biométrico...');
-            await _cameraController?.stopImageStream();
+            
+            try {
+              if (_cameraController != null && _cameraController!.value.isStreamingImages) {
+                await _cameraController!.stopImageStream();
+              }
+            } catch (e) {
+              debugPrint('Aviso al detener stream: $e');
+            }
+
             await _procesarReconocimientoBiometrico(faces.first);
+            return;
           }
         }
       } catch (e) {
@@ -499,6 +512,8 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
   void _iniciarVerificacionRostroAdmin() {
     if (_cameraController == null || !_cameraController!.value.isInitialized) return;
 
+    if (_cameraController!.value.isStreamingImages) return;
+
     _cameraController!.startImageStream((CameraImage image) async {
       if (_isSaving || _isDetectingAdmin) return;
       _isDetectingAdmin = true;
@@ -571,7 +586,11 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
 
   @override
   void dispose() {
-    _cameraController?.stopImageStream();
+    try {
+      if (_cameraController != null && _cameraController!.value.isStreamingImages) {
+        _cameraController?.stopImageStream();
+      }
+    } catch (_) {}
     _adminFaceDetector.close();
     _cameraController?.dispose();
     _cedulaController.dispose();
@@ -600,7 +619,12 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
     });
 
     try {
-      await _cameraController?.stopImageStream();
+      try {
+        if (_cameraController != null && _cameraController!.value.isStreamingImages) {
+          await _cameraController?.stopImageStream();
+        }
+      } catch (_) {}
+
       final XFile imageFile = await _cameraController!.takePicture();
       final bytes = await imageFile.readAsBytes();
 
@@ -622,7 +646,7 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Escaner biométrico completado!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Enrolamiento biométrico completado!')));
       _cedulaController.clear();
       _nombreController.clear();
       _apellidoController.clear();
@@ -644,7 +668,7 @@ class _AdminEnrolamientoScreenState extends State<AdminEnrolamientoScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E293B),
-        title: Text('Panel Admin - Escaner Biométrico', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
+        title: Text('Panel Admin - Enrolamiento Biométrico', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
