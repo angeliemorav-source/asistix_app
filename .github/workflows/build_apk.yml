@@ -4,16 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:   # permite lanzarlo a mano desde la pestaña Actions
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    env:
-      GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError -Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=1g\" -Dorg.gradle.parallel=false"
-      JAVA_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
-      _JAVA_OPTIONS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
-      KOTLIN_DAEMON_ARGS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
 
     steps:
       - name: Descargar el repositorio
@@ -22,80 +17,29 @@ jobs:
       - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Configurar Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
+          cache: true
 
-      - name: Aceptar licencias de Android automáticamente
-        run: |
-          mkdir -p ${ANDROID_HOME}/licenses
-          yes | sdkmanager --licenses || true
-
-      - name: Forzar compatibilidad JVM Target 17 en todas las dependencias
-        run: |
-          mkdir -p android
-          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
-          echo "org.gradle.parallel=false" >> android/gradle.properties
-          
-          cat << 'EOF' >> android/build.gradle
-          
-          subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty("android")) {
-                      project.android {
-                          compileOptions {
-                              sourceCompatibility = JavaVersion.VERSION_17
-                              targetCompatibility = JavaVersion.VERSION_17
-                          }
-                      }
-                  }
-                  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-                      kotlinOptions {
-                          jvmTarget = "17"
-                      }
-                  }
-              }
-          }
-          EOF
+      - name: Verificar que el modelo biométrico existe
+        run: test -f assets/mobilefacenet.tflite
 
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Precompilar dependencias de Flutter
-        run: flutter build apk --config-only
-
-      - name: Compilar APK nativa directamente con Gradle
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease
-
-      - name: Crear carpetas manuales y reubicar APK por la fuerza
-        run: |
-          # 1. Creamos a la fuerza la ruta que solicita el sistema en la raíz de Flutter
-          mkdir -p build/app/outputs/flutter-apk/
-          
-          # 2. Creamos por si acaso la ruta alternativa en android/app/
-          mkdir -p android/app/
-          
-          # 3. Buscamos cualquier APK generada en el sistema y la copiamos en AMBAS rutas para asegurar aceptación
-          find . -name "*.apk" -exec cp {} build/app/outputs/flutter-apk/app-release.apk \; || true
-          find . -name "*.apk" -exec cp {} android/app/app-release.apk \; || true
-          
-          # 4. Mostramos en la consola del servidor dónde quedaron los archivos para verificar visualmente
-          echo "--- Contenido verificado en build/app/outputs/flutter-apk/ ---"
-          ls -la build/app/outputs/flutter-apk/ || echo "Vacío"
-          echo "--- Contenido verificado en android/app/ ---"
-          ls -la android/app/ || echo "Vacío"
+      # Solo arquitecturas ARM (teléfonos/tablets reales). Evita compilar x86,
+      # que es lento y no hace falta.
+      - name: Compilar APK release
+        run: flutter build apk --release --target-platform android-arm,android-arm64
 
       - name: Guardar la APK como resultado
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
-          path: android/app/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-

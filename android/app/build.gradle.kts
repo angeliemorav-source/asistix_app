@@ -14,6 +14,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Nuevo formato moderno exigido por Kotlin para evitar advertencias y errores de JVM
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -24,7 +25,7 @@ android {
         applicationId = "com.example.asistix_app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode.toInt()
+        versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
@@ -38,4 +39,3 @@ android {
 flutter {
     source = "../.."
 }
-
